@@ -15,7 +15,7 @@ class PolicyWithValue(object):
     Encapsulates fields and methods for RL policy and value function estimation with shared parameters
     """
 
-    def __init__(self, env, observations, latent, estimate_q=False, vf_latent=None, sess=None, **tensors):
+    def __init__(self, env, observations, latent, estimate_q=False, vf_latent=None,h_latent=None, sess=None, **tensors):
         """
         Parameters:
         ----------
@@ -41,6 +41,7 @@ class PolicyWithValue(object):
         vf_latent = vf_latent if vf_latent is not None else latent
 
         vf_latent = tf.layers.flatten(vf_latent)
+        h_latent = tf.layers.flatten(h_latent)
         latent = tf.layers.flatten(latent)
 
         # Based on the action space, will select what probability distribution type
@@ -64,7 +65,7 @@ class PolicyWithValue(object):
             self.vf = self.vf[:,0]
 
         ### add H network
-        self.h = fc(vf_latent, 'h', 1)
+        self.h = fc(h_latent, 'h', 1)
         self.h = self.h[:, 0]
     def _evaluate(self, variables, observation, **extra_feed):
         sess = self.sess
@@ -175,6 +176,7 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
 
         if _v_net is None or _v_net == 'shared':
             vf_latent = policy_latent
+            h_latent = policy_latent
         else:
             if _v_net == 'copy':
                 _v_net = policy_network
@@ -184,12 +186,15 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
             with tf.variable_scope('vf', reuse=tf.AUTO_REUSE):
                 # TODO recurrent architectures are not supported with value_network=copy yet
                 vf_latent = _v_net(encoded_x)
+            with tf.variable_scope('h', reuse=tf.AUTO_REUSE):
+                h_latent = _v_net(encoded_x)
 
         policy = PolicyWithValue(
             env=env,
             observations=X,
             latent=policy_latent,
             vf_latent=vf_latent,
+            h_latent=h_latent,
             sess=sess,
             estimate_q=estimate_q,
             **extra_tensors

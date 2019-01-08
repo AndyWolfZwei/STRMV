@@ -1,9 +1,12 @@
 '''
 Disclaimer: this code is highly based on trpo_mpi at @openai/baselines and @openai/imitation
 train:
---env_id AVXIntel4s-v0 --expert_path /home/zhiwei/path/path_sum.npz --save_per_iter 10 --checkpoint_dir /home/zhiwei/save_model --log_dir /home/zhiwei/save_model
+--env_id AVXIntel4sSoet-v0 --expert_path /home/zhiwei/sorted_path_1000times_20steps/path_sum.npz --save_per_iter 10 --checkpoint_dir /home/zhiwei/save_model --log_dir /home/zhiwei/save_model --seed 1001 > rlt.log
 evaluate:
 --env_id AVXIntel4s-v0 --task evaluate --save_sample --load_model_path /home/zhiwei/save_model/trpo_gail.transition_limitation_-1.AVXIntel4s.g_step_3.d_step_1.policy_entcoeff_0.adversary_entcoeff_0.001.seed_19930401/trpo_gail.transition_limitation_-1.AVXIntel4s.g_step_3.d_step_1.policy_entcoeff_0.adversary_entcoeff_0.001.seed_19930401_50
+--env_id AVXIntel4s-v0 --task evaluate --save_sample --load_model_path /home/zhiwei/save_model/trpo_gail.transition_limitation_-1.AVXIntel4sSoet.g_step_3.d_step_1.policy_entcoeff_0.adversary_entcoeff_0.001.seed_1000/trpo_gail.transition_limitation_-1.AVXIntel4sSoet.g_step_3.d_step_1.policy_entcoeff_0.adversary_entcoeff_0.001.seed_1000_20
+--env_id AVXIntel4s-v0 --task evaluate --save_sample /home/zhiwei/save_model/trpo_gail.transition_limitation_-1.AVXIntel4sSoet.g_step_3.d_step_1.policy_entcoeff_0.adversary_entcoeff_0.001.seed_1002/trpo_gail.transition_limitation_-1.AVXIntel4sSoet.g_step_3.d_step_1.policy_entcoeff_0.adversary_entcoeff_0.001.seed_1002_140
+
 '''
 
 import argparse
@@ -176,6 +179,7 @@ def runner(env, policy_func, load_model_path, timesteps_per_batch, number_trajs,
     acs_list = []
     len_list = []
     ret_list = []
+    number_trajs = 1
     for _ in tqdm(range(number_trajs)):
         traj = traj_1_generator(pi, env, timesteps_per_batch, stochastic=stochastic_policy)
         obs, acs, ep_len, ep_ret = traj['ob'], traj['ac'], traj['ep_len'], traj['ep_ret']
@@ -192,6 +196,8 @@ def runner(env, policy_func, load_model_path, timesteps_per_batch, number_trajs,
         filename = load_model_path + '.' + env.spec.id
         np.savez(filename, obs=np.array(obs_list), acs=np.array(acs_list),
                  lens=np.array(len_list), rets=np.array(ret_list))
+
+        np.savetxt('/home/zhiwei/result/' + load_model_path.split('_')[-1], obs_list[-1], fmt='%.1f')
     avg_len = sum(len_list)/len(len_list)
     avg_ret = sum(ret_list)/len(ret_list)
     print("Average length:", avg_len)

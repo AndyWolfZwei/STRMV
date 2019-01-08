@@ -98,6 +98,9 @@ class Model(object):
         # UPDATE THE PARAMETERS USING LOSS
         # 1. Get the model parameters
         params = tf.trainable_variables('ppo2_model')
+        h_params = tf.trainable_variables('ppo2_model/h')
+        vf_params = tf.trainable_variables('ppo2_model/vf')
+        pi_params = tf.trainable_variables('ppo2_model/pi')
         # 2. Build our trainer
         if MPI is not None:
             self.trainer = MpiAdamOptimizer(MPI.COMM_WORLD, learning_rate=LR, epsilon=1e-5)
@@ -140,7 +143,7 @@ class Model(object):
         # Here we calculate advantage A(s,a) = R + yV(s') - V(s)
         # Returns = R + yV(s')
         advs = returns - values
-
+        returns = returns + hs
         # Normalize the advantages
         advs = (advs - advs.mean()) / (advs.std() + 1e-8)
 

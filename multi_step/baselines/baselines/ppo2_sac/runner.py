@@ -55,7 +55,7 @@ class Runner(AbstractEnvRunner):
         mb_h = np.asarray(mb_h, dtype=np.float32)
         mb_sigma = np.asarray(mb_sigma, dtype=np.float32)
         mb_sigma = np.mean(mb_sigma, axis=2)
-        mb_sigma = -0.5 * np.log(2 * np.pi * np.e * mb_sigma * mb_sigma)
+        mb_sigma = 0.5 * np.log(2 * np.pi * np.e * mb_sigma * mb_sigma)
 
         last_hs = self.model.hvalue(self.obs, S=self.states, M=self.dones)
 
@@ -76,9 +76,9 @@ class Runner(AbstractEnvRunner):
                 nextvalues = mb_values[t+1]
                 nexthvalues = mb_h[t+1]
             delta = mb_rewards[t] + self.gamma * nextvalues * nextnonterminal - mb_values[t]
-            delta_h = mb_sigma[t] + self.gamma * nexthvalues * nextnonterminal - mb_h[t]
-            mb_advs[t] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam
-            mb_hs[t] = lasthlam = delta_h + self.gamma * self.lam * nextnonterminal * lasthlam
+            delta_h = mb_sigma[t] + 0 * nexthvalues * nextnonterminal - mb_h[t]
+            mb_advs[t] = lastgaelam = delta - 0.05 * delta_h + self.gamma * self.lam * nextnonterminal * lastgaelam
+            mb_hs[t] = lasthlam = delta_h + 0 * self.lam * nextnonterminal * lasthlam
             # mb_hs[t] = lasthlam = delta_h
         mb_returns = mb_advs + mb_values
         return (*map(sf01, (mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, mb_hs)),

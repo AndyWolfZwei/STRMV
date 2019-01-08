@@ -103,7 +103,7 @@ def one_sided_ema(xolds, yolds, low=None, high=None, n=512, decay_steps=1., low_
         sum_ys[i] = sum_y
         count_ys[i] = count_y
 
-    ys = sum_ys / count_ys
+    ys = sum_ys / (count_ys + 1e-6)
     ys[count_ys < low_counts_threshold] = np.nan
 
     return xnews, ys, count_ys
@@ -353,10 +353,10 @@ def plot_results(
                 ystderr = ystd / np.sqrt(len(ys))
                 l, = axarr[isplit][0].plot(usex, ymean, color=color)
                 g2l[group] = l
-                if shaded_err:
-                    ax.fill_between(usex, ymean - ystderr, ymean + ystderr, color=color, alpha=.4)
-                if shaded_std:
-                    ax.fill_between(usex, ymean - ystd,    ymean + ystd,    color=color, alpha=.2)
+                # if shaded_err:
+                #     ax.fill_between(usex, ymean - ystderr, ymean + ystderr, color=color, alpha=.4)
+                # if shaded_std:
+                #     ax.fill_between(usex, ymean - ystd,    ymean + ystd,    color=color, alpha=.2)
 
 
         # https://matplotlib.org/users/legend_guide.html
