@@ -102,7 +102,10 @@ class DiagGaussianPdType(PdType):
         mean = _matching_fc(latent_vector, 'pi', self.size, init_scale=init_scale, init_bias=init_bias)
         logstd = tf.get_variable(name='pi/logstd', shape=[1, self.size], initializer=tf.zeros_initializer())
         pdparam = tf.concat([mean, mean * 0.0 + logstd], axis=1)
-        return self.pdfromflat(pdparam), mean
+        # pdparam = _matching_fc(latent_vector, 'pi', self.size*2, init_scale=init_scale, init_bias=init_bias)
+        # logstd = tf.get_variable(name='pi/logstd', shape=[1, self.size], initializer=tf.zeros_initializer())
+        # pdparam = tf.concat([mean, mean * 0.0 + logstd], axis=1)
+        return self.pdfromflat(pdparam)
 
     def param_shape(self):
         return [2*self.size]

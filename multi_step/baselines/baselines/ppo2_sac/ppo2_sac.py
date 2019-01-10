@@ -154,7 +154,9 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
                     end = start + nbatch_train
                     mbinds = inds[start:end]
                     slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs, hs))
-                    mblossvals.append(model.train(lrnow, cliprangenow, *slices))
+                    a = model.train(lrnow, cliprangenow, *slices)
+
+                    mblossvals.append(a[:-2])
         else: # recurrent version
             assert nenvs % nminibatches == 0
             envsperbatch = nenvs // nminibatches
@@ -170,7 +172,9 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
                     slices = (arr[mbflatinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
                     mbstates = states[mbenvinds]
                     mblossvals.append(model.train(lrnow, cliprangenow, *slices, mbstates))
-
+        print('mean: {}'.format(a[-2][0]))
+        print('std: {}'.format(a[-1][0]))
+        print('-' * 50)
         # Feedforward --> get losses --> update
         lossvals = np.mean(mblossvals, axis=0)
         # End timer

@@ -77,8 +77,6 @@ class Model(object):
         hpredclipped = OLDVPRED + tf.clip_by_value(train_model.h - OLDVPRED, - CLIPRANGE, CLIPRANGE)
         h_loss2 = tf.square(hpredclipped - H)
         h_loss = .5 * tf.reduce_mean(tf.maximum(h_loss1, h_loss2))
-        ### sigma
-        self.sigma = train_model.pd
 
         # Calculate ratio (pi current policy / pi old policy)
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
@@ -98,9 +96,6 @@ class Model(object):
         # UPDATE THE PARAMETERS USING LOSS
         # 1. Get the model parameters
         params = tf.trainable_variables('ppo2_model')
-        h_params = tf.trainable_variables('ppo2_model/h')
-        vf_params = tf.trainable_variables('ppo2_model/vf')
-        pi_params = tf.trainable_variables('ppo2_model/pi')
         # 2. Build our trainer
         if MPI is not None:
             self.trainer = MpiAdamOptimizer(MPI.COMM_WORLD, learning_rate=LR, epsilon=1e-5)
@@ -117,11 +112,13 @@ class Model(object):
         # zip aggregate each gradient with parameters associated
         # For instance zip(ABCD, xyza) => Ax, By, Cz, Da
 
+        self.mean = train_model.pd.mean
+        self.std = train_model.pd.logstd
         self.grads = grads
         self.var = var
         self._train_op = self.trainer.apply_gradients(grads_and_var)
-        self.loss_names = ['policy_loss', 'value_loss', 'h_loss', 'approxkl', 'clipfrac']
-        self.stats_list = [pg_loss, vf_loss, h_loss, approxkl, clipfrac]
+        self.loss_names = ['policy_loss', 'value_loss', 'h_loss', 'approxkl', 'clipfrac', 'self.mean', 'self.std']
+        self.stats_list = [pg_loss, vf_loss, h_loss, approxkl, clipfrac, self.mean,  self.std]
 
 
         self.train_model = train_model
