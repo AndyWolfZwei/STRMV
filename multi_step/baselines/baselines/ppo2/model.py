@@ -74,10 +74,6 @@ class Model(object):
         # Calculate ratio (pi current policy / pi old policy)
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
         ratio = ratio * tf.concat([[1], ratio[:-1]], 0)
-        # ratio = ratio * tf.concat([[1,1], ratio[:-2]], 0)
-        # ratio = ratio * tf.concat([[1, 1, 1], ratio[:-3]], 0)
-        # ratio = ratio * tf.concat([[1, 1, 1, 1], ratio[:-4]], 0)
-        # ratio = ratio * tf.concat([[1, 1, 1, 1, 1], ratio[:-5]], 0)
         ratio0 = tf.reduce_mean(ratio)
         # Defining Loss = - J is equivalent to max J
         pg_losses = -ADV * ratio

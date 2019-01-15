@@ -15,7 +15,7 @@ class PolicyWithValue(object):
     Encapsulates fields and methods for RL policy and value function estimation with shared parameters
     """
 
-    def __init__(self, env, observations, latent, estimate_q=False, vf_latent=None,h_latent=None, sess=None, **tensors):
+    def __init__(self, env, observations, latent, std_latent, estimate_q=False, vf_latent=None,h_latent=None, sess=None, **tensors):
         """
         Parameters:
         ----------
@@ -41,13 +41,14 @@ class PolicyWithValue(object):
         vf_latent = vf_latent if vf_latent is not None else latent
 
         vf_latent = tf.layers.flatten(vf_latent)
-        h_latent = tf.layers.flatten(h_latent)
+        # h_latent = tf.layers.flatten(h_latent)
         latent = tf.layers.flatten(latent)
+        std_latent = tf.layers.flatten(std_latent)
 
         # Based on the action space, will select what probability distribution type
         self.pdtype = make_pdtype(env.action_space)
 
-        self.pd = self.pdtype.pdfromlatent(latent, init_scale=0.01)
+        self.pd = self.pdtype.pdfromlatent(latent, std_latent, init_scale=0.01)
 
         # Take an action
         self.action = self.pd.sample()
@@ -64,9 +65,6 @@ class PolicyWithValue(object):
             self.vf = fc(vf_latent, 'vf', 1)
             self.vf = self.vf[:,0]
 
-        ### add H network
-        self.h = fc(h_latent, 'h', 1)
-        self.h = self.h[:, 0]
     def _evaluate(self, variables, observation, **extra_feed):
         sess = self.sess
         feed_dict = {self.X: adjust_shape(self.X, observation)}
@@ -94,10 +92,10 @@ class PolicyWithValue(object):
         (action, value estimate, next state, negative log likelihood of the action under current policy parameters) tuple
         """
 
-        a, v, state, neglogp, h, sigma = self._evaluate([self.action, self.vf, self.state, self.neglogp, self.h, self.sigma], observation, **extra_feed)
+        a, v, state, neglogp = self._evaluate([self.action, self.vf, self.state, self.neglogp], observation, **extra_feed)
         if state.size == 0:
             state = None
-        return a, v, state, neglogp, h, sigma
+        return a, v, state, neglogp
 
     def value(self, ob, *args, **kwargs):
         """
@@ -159,7 +157,7 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
 
         encoded_x = encode_observation(ob_space, encoded_x)
 
-        with tf.variable_scope('pi', reuse=tf.AUTO_REUSE):
+        with tf.variable_scope('pi/mean', reuse=tf.AUTO_REUSE):
             policy_latent = policy_network(encoded_x)
             if isinstance(policy_latent, tuple):
                 policy_latent, recurrent_tensors = policy_latent
@@ -170,13 +168,15 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
                     assert nenv > 0, 'Bad input for recurrent policy: batch size {} smaller than nsteps {}'.format(nbatch, nsteps)
                     policy_latent, recurrent_tensors = policy_network(encoded_x, nenv)
                     extra_tensors.update(recurrent_tensors)
+        with tf.variable_scope('pi/std', reuse=tf.AUTO_REUSE):
+            std_latent = policy_network(encoded_x)
 
 
         _v_net = value_network
 
         if _v_net is None or _v_net == 'shared':
             vf_latent = policy_latent
-            h_latent = policy_latent
+            # h_latent = policy_latent
         else:
             if _v_net == 'copy':
                 _v_net = policy_network
@@ -186,15 +186,16 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
             with tf.variable_scope('vf', reuse=tf.AUTO_REUSE):
                 # TODO recurrent architectures are not supported with value_network=copy yet
                 vf_latent = _v_net(encoded_x)
-            with tf.variable_scope('h', reuse=tf.AUTO_REUSE):
-                h_latent = _v_net(encoded_x)
+            # with tf.variable_scope('h', reuse=tf.AUTO_REUSE):
+            #     h_latent = _v_net(encoded_x)
 
         policy = PolicyWithValue(
             env=env,
             observations=X,
             latent=policy_latent,
             vf_latent=vf_latent,
-            h_latent=h_latent,
+            # h_latent=h_latent,
+            std_latent=std_latent,
             sess=sess,
             estimate_q=estimate_q,
             **extra_tensors
