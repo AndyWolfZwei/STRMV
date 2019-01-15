@@ -15,7 +15,7 @@ class PolicyWithValue(object):
     Encapsulates fields and methods for RL policy and value function estimation with shared parameters
     """
 
-    def __init__(self, env, observations, latent, std_latent, estimate_q=False, vf_latent=None,h_latent=None, sess=None, **tensors):
+    def __init__(self, env, observations, latent, std_latent, estimate_q=False, vf_latent=None, h_latent=None, sess=None, **tensors):
         """
         Parameters:
         ----------
@@ -41,7 +41,7 @@ class PolicyWithValue(object):
         vf_latent = vf_latent if vf_latent is not None else latent
 
         vf_latent = tf.layers.flatten(vf_latent)
-        # h_latent = tf.layers.flatten(h_latent)
+        h_latent = tf.layers.flatten(h_latent)
         latent = tf.layers.flatten(latent)
         std_latent = tf.layers.flatten(std_latent)
 
@@ -52,7 +52,7 @@ class PolicyWithValue(object):
 
         # Take an action
         self.action = self.pd.sample()
-        self.sigma = self.pd.std
+        self.std = self.pd.std
         # Calculate the neg log of our probability
         self.neglogp = self.pd.neglogp(self.action)
         self.sess = sess or tf.get_default_session()
@@ -64,7 +64,8 @@ class PolicyWithValue(object):
         else:
             self.vf = fc(vf_latent, 'vf', 1)
             self.vf = self.vf[:,0]
-
+        self.h = fc(h_latent,'h',1)
+        self.h = self.h[:,0]
     def _evaluate(self, variables, observation, **extra_feed):
         sess = self.sess
         feed_dict = {self.X: adjust_shape(self.X, observation)}
@@ -92,10 +93,10 @@ class PolicyWithValue(object):
         (action, value estimate, next state, negative log likelihood of the action under current policy parameters) tuple
         """
 
-        a, v, state, neglogp = self._evaluate([self.action, self.vf, self.state, self.neglogp], observation, **extra_feed)
+        a, v, state, neglogp, h, std = self._evaluate([self.action, self.vf, self.state, self.neglogp, self.h, self.std], observation, **extra_feed)
         if state.size == 0:
             state = None
-        return a, v, state, neglogp
+        return a, v, state, neglogp, h, std
 
     def value(self, ob, *args, **kwargs):
         """
@@ -112,24 +113,10 @@ class PolicyWithValue(object):
         -------
         value estimate
         """
-        return self._evaluate(self.vf, ob, *args, **kwargs)
+        return self._evaluate([self.vf, self.h], ob, *args, **kwargs)
 
-    def hvalue(self, ob, *args, **kwargs):
-        """
-        Compute value estimate(s) given the observation(s)
-
-        Parameters:
-        ----------
-
-        observation     observation data (either single or a batch)
-
-        **extra_feed    additional data such as state or mask (names of the arguments should match the ones in constructor, see __init__)
-
-        Returns:
-        -------
-        value estimate
-        """
-        return self._evaluate(self.h, ob, *args, **kwargs)
+    # def hvalues(self, ob, *args, **kwargs):
+    #     return self._evaluate(self.h, ob, *args, **kwargs)
 
     def save(self, save_path):
         tf_util.save_state(save_path, sess=self.sess)
@@ -176,7 +163,7 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
 
         if _v_net is None or _v_net == 'shared':
             vf_latent = policy_latent
-            # h_latent = policy_latent
+            h_latent = policy_latent
         else:
             if _v_net == 'copy':
                 _v_net = policy_network
@@ -186,15 +173,15 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
             with tf.variable_scope('vf', reuse=tf.AUTO_REUSE):
                 # TODO recurrent architectures are not supported with value_network=copy yet
                 vf_latent = _v_net(encoded_x)
-            # with tf.variable_scope('h', reuse=tf.AUTO_REUSE):
-            #     h_latent = _v_net(encoded_x)
+            with tf.variable_scope('h', reuse=tf.AUTO_REUSE):
+                h_latent = _v_net(encoded_x)
 
         policy = PolicyWithValue(
             env=env,
             observations=X,
             latent=policy_latent,
             vf_latent=vf_latent,
-            # h_latent=h_latent,
+            h_latent=h_latent,
             std_latent=std_latent,
             sess=sess,
             estimate_q=estimate_q,

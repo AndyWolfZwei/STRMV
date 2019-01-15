@@ -50,6 +50,8 @@ class Model(object):
         self.LR = LR = tf.placeholder(tf.float32, [])
         # Cliprange
         self.CLIPRANGE = CLIPRANGE = tf.placeholder(tf.float32, [])
+        self.H = H = tf.placeholder(tf.float32, [None])
+        self.HADV = HADV = tf.placeholder(tf.float32, [None])
 
         neglogpac = train_model.pd.neglogp(A)
 
@@ -71,14 +73,18 @@ class Model(object):
 
         vf_loss = .5 * tf.reduce_mean(tf.maximum(vf_losses1, vf_losses2))
 
+        ### H loss
+        hpred = train_model.h
+        h_loss = tf.square(hpred - H)
+
         # Calculate ratio (pi current policy / pi old policy)
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
-        ratio = ratio * tf.concat([[1], ratio[:-1]], 0)
+        # ratio = ratio * tf.concat([[1], ratio[:-1]], 0)
         ratio0 = tf.reduce_mean(ratio)
         # Defining Loss = - J is equivalent to max J
-        pg_losses = -ADV * ratio
+        pg_losses = -(ADV+ 0.05*HADV) * ratio
 
-        pg_losses2 = -ADV * tf.clip_by_value(ratio, 1.0 - CLIPRANGE, 1.0 + CLIPRANGE)
+        pg_losses2 = -(ADV+ 0.05*HADV) * tf.clip_by_value(ratio, 1.0 - CLIPRANGE, 1.0 + CLIPRANGE)
 
         # Final PG loss
         pg_loss = tf.reduce_mean(tf.maximum(pg_losses, pg_losses2))
@@ -86,7 +92,7 @@ class Model(object):
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
 
         # Total loss
-        loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
+        loss = pg_loss + h_loss * ent_coef + vf_loss * vf_coef
 
         # UPDATE THE PARAMETERS USING LOSS
         # 1. Get the model parameters
@@ -128,13 +134,21 @@ class Model(object):
         if MPI is not None:
             sync_from_root(sess, global_variables) #pylint: disable=E1101
 
-    def train(self, lr, cliprange, obs, returns, masks, actions, values, neglogpacs, states=None):
+    def train(self, lr, cliprange, obs, returns, hreturns, masks, actions, values, hvalues, neglogpacs, states=None):
         # Here we calculate advantage A(s,a) = R + yV(s') - V(s)
         # Returns = R + yV(s')
-        advs = returns - values
+        ### here we calculate del_hadvs = E(sigma) + yH(s') - H(s)
+        ### A = R + yV(s') - V(s) + h_coef * (E(sigma) + yH(s') - H(s))
+        ### returns = A + V
+        ### ---------RUNNER above-----------
+        ### returns = A + V - V    for V network
+        ### advs = A + V + H  used for pi_mean network
 
+        advs = returns - values
+        hadvs = hreturns - hvalues
         # Normalize the advantages
         advs = (advs - advs.mean()) / (advs.std() + 1e-8)
+        hadvs = (hadvs - hadvs.mean()) / (hadvs.std() + 1e-8)
 
         td_map = {
             self.train_model.X : obs,
@@ -144,7 +158,9 @@ class Model(object):
             self.LR : lr,
             self.CLIPRANGE : cliprange,
             self.OLDNEGLOGPAC : neglogpacs,
-            self.OLDVPRED : values
+            self.OLDVPRED : values,
+            self.H: hreturns,
+            self.HADV: hadvs,
         }
         if states is not None:
             td_map[self.train_model.S] = states
