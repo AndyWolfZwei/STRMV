@@ -19,7 +19,7 @@ class Runner(AbstractEnvRunner):
 
     def run(self):
         # Here, we init the lists that will contain the mb of experiences
-        mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs, mb_h, mb_std = [],[],[],[],[],[],[],[]
+        mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs, mb_h, mb_std, mb_neglogstd = [],[],[],[],[],[],[],[],[]
         mb_states = self.states
         epinfos = []
         # For n in range number of steps
@@ -31,6 +31,7 @@ class Runner(AbstractEnvRunner):
             mb_actions.append(actions)
             mb_values.append(values)
             mb_neglogpacs.append(neglogpacs)
+            mb_neglogstd.append(-np.log(std))
             mb_dones.append(self.dones)
             mb_h.append(h)
             mb_std.append(std)
@@ -48,6 +49,7 @@ class Runner(AbstractEnvRunner):
         mb_actions = np.asarray(mb_actions)
         mb_values = np.asarray(mb_values, dtype=np.float32)
         mb_neglogpacs = np.asarray(mb_neglogpacs, dtype=np.float32)
+        mb_neglogstd = np.asarray(mb_neglogstd, dtype=np.float32)
         mb_dones = np.asarray(mb_dones, dtype=np.bool)
         last_values, last_hs = self.model.value(self.obs, S=self.states, M=self.dones)
         # last_hs = self.model.hvalues(self.obs, S=self.states, M=self.dones)
@@ -78,7 +80,7 @@ class Runner(AbstractEnvRunner):
             mb_hadvs[t] = lasthlam = delta_h + self.gamma * self.lam * nextnonterminal * lasthlam
         mb_returns = mb_advs + mb_values
         mb_hreturns = mb_hadvs + mb_h
-        return (*map(sf01, (mb_obs, mb_returns, mb_hreturns, mb_dones, mb_actions, mb_values, mb_h, mb_neglogpacs)),
+        return (*map(sf01, (mb_obs, mb_returns, mb_hreturns, mb_dones, mb_actions, mb_values, mb_h, mb_neglogpacs, mb_neglogstd)),
             mb_states, epinfos)
 # obs, returns, masks, actions, values, neglogpacs, states = runner.run()
 def sf01(arr):

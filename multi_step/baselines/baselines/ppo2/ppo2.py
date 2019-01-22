@@ -132,9 +132,9 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         # Calculate the cliprange
         cliprangenow = cliprange(frac)
         # Get minibatch
-        obs, returns, hreturns, masks, actions, values, hvalues, neglogpacs, states, epinfos = runner.run() #pylint: disable=E0632
-        # if eval_env is not None:
-        #     eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run() #pylint: disable=E0632
+        obs, returns, hreturns, masks, actions, values, hvalues, neglogpacs, neglogstd, states, epinfos = runner.run() #pylint: disable=E0632
+        if eval_env is not None:
+            eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run() #pylint: disable=E0632
 
         epinfobuf.extend(epinfos)
         # if eval_env is not None:
@@ -153,8 +153,9 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
                 for start in range(0, nbatch, nbatch_train):
                     end = start + nbatch_train
                     mbinds = inds[start:end]
-                    slices = (arr[mbinds] for arr in (obs, returns, hreturns, masks, actions, values, hvalues, neglogpacs))
-                    mblossvals.append(model.train(lrnow, cliprangenow, *slices))
+                    slices = (arr[mbinds] for arr in (obs, returns, hreturns, masks, actions, values, hvalues, neglogpacs, neglogstd))
+                    a = model.train(lrnow, cliprangenow, *slices)
+                    mblossvals.append(a[:-1])
         # else: # recurrent version
         #     assert nenvs % nminibatches == 0
         #     envsperbatch = nenvs // nminibatches

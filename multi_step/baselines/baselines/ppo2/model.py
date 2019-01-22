@@ -45,6 +45,7 @@ class Model(object):
         self.R = R = tf.placeholder(tf.float32, [None])
         # Keep track of old actor
         self.OLDNEGLOGPAC = OLDNEGLOGPAC = tf.placeholder(tf.float32, [None])
+        self.OLDNEGLOGSTD = OLDNEGLOGSTD = tf.placeholder(tf.float32, [None, ac_space.shape[0]])
         # Keep track of old critic
         self.OLDVPRED = OLDVPRED = tf.placeholder(tf.float32, [None])
         self.LR = LR = tf.placeholder(tf.float32, [])
@@ -54,7 +55,7 @@ class Model(object):
         self.HADV = HADV = tf.placeholder(tf.float32, [None])
 
         neglogpac = train_model.pd.neglogp(A)
-
+        neglogstd = -train_model.pd.logstd
         # Calculate the entropy
         # Entropy is used to improve exploration by limiting the premature convergence to suboptimal policy.
         entropy = tf.reduce_mean(train_model.pd.entropy())
@@ -79,20 +80,22 @@ class Model(object):
 
         # Calculate ratio (pi current policy / pi old policy)
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
-        # ratio = ratio * tf.concat([[1], ratio[:-1]], 0)
-        ratio0 = tf.reduce_mean(ratio)
+        v_ratio = tf.reduce_mean(OLDNEGLOGSTD - neglogstd, 1)
+        v_ratio_t1 = tf.concat([v_ratio[1:], v_ratio[-1:]],axis=0)
         # Defining Loss = - J is equivalent to max J
-        pg_losses = -(ADV+ 0.05*HADV) * ratio
-
-        pg_losses2 = -(ADV+ 0.05*HADV) * tf.clip_by_value(ratio, 1.0 - CLIPRANGE, 1.0 + CLIPRANGE)
-
+        pg_losses = -(ADV + ent_coef * HADV + LR * v_ratio_t1) * ratio
+        CLIPRANGE_ALPHA = 0.0003/(LR + 1e-6)
+        pg_losses2 = -(ADV + ent_coef * HADV + LR * tf.clip_by_value(v_ratio_t1, 1.0 - CLIPRANGE, 1.0 + CLIPRANGE)) * \
+                     tf.clip_by_value(ratio * v_ratio, 1.0 - CLIPRANGE / 1.5, 1.0 + CLIPRANGE / 1.5) / \
+                     tf.clip_by_value(v_ratio, 1.0 - CLIPRANGE, 1.0 + CLIPRANGE)
+        ########### 2 -> 0.2   2.1 -> 0.5
         # Final PG loss
         pg_loss = tf.reduce_mean(tf.maximum(pg_losses, pg_losses2))
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
 
         # Total loss
-        loss = pg_loss + h_loss * ent_coef + vf_loss * vf_coef
+        loss = pg_loss + h_loss + vf_loss * vf_coef
 
         # UPDATE THE PARAMETERS USING LOSS
         # 1. Get the model parameters
@@ -116,8 +119,8 @@ class Model(object):
         self.grads = grads
         self.var = var
         self._train_op = self.trainer.apply_gradients(grads_and_var)
-        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac', 'ratio']
-        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, ratio0]
+        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac','LR']
+        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, LR]
 
 
         self.train_model = train_model
@@ -134,7 +137,7 @@ class Model(object):
         if MPI is not None:
             sync_from_root(sess, global_variables) #pylint: disable=E1101
 
-    def train(self, lr, cliprange, obs, returns, hreturns, masks, actions, values, hvalues, neglogpacs, states=None):
+    def train(self, lr, cliprange, obs, returns, hreturns, masks, actions, values, hvalues, neglogpacs, neglogstd, states=None):
         # Here we calculate advantage A(s,a) = R + yV(s') - V(s)
         # Returns = R + yV(s')
         ### here we calculate del_hadvs = E(sigma) + yH(s') - H(s)
@@ -158,6 +161,7 @@ class Model(object):
             self.LR : lr,
             self.CLIPRANGE : cliprange,
             self.OLDNEGLOGPAC : neglogpacs,
+            self.OLDNEGLOGSTD : neglogstd,
             self.OLDVPRED : values,
             self.H: hreturns,
             self.HADV: hadvs,
