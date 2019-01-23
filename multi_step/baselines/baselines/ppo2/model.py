@@ -49,6 +49,7 @@ class Model(object):
         # Keep track of old critic
         self.OLDVPRED = OLDVPRED = tf.placeholder(tf.float32, [None])
         self.LR = LR = tf.placeholder(tf.float32, [])
+        self.CLIPRANGE_ALPHA = CLIPRANGE_ALPHA = tf.placeholder(tf.float32, [])
         # Cliprange
         self.CLIPRANGE = CLIPRANGE = tf.placeholder(tf.float32, [])
         self.H = H = tf.placeholder(tf.float32, [None])
@@ -76,19 +77,19 @@ class Model(object):
 
         ### H loss
         hpred = train_model.h
-        h_loss = tf.square(hpred - H)
+        h_loss = .5 * tf.reduce_mean(tf.square(hpred - H))
 
         # Calculate ratio (pi current policy / pi old policy)
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
         v_ratio = tf.reduce_mean(OLDNEGLOGSTD - neglogstd, 1)
+        v_ratio_exp = tf.exp(tf.reduce_mean(OLDNEGLOGSTD - neglogstd, 1))
         v_ratio_t1 = tf.concat([v_ratio[1:], v_ratio[-1:]],axis=0)
         # Defining Loss = - J is equivalent to max J
-        pg_losses = -(ADV + ent_coef * HADV + LR * v_ratio_t1) * ratio
-        CLIPRANGE_ALPHA = 0.0003/(LR + 1e-6)
-        pg_losses2 = -(ADV + ent_coef * HADV + LR * tf.clip_by_value(v_ratio_t1, 1.0 - CLIPRANGE, 1.0 + CLIPRANGE)) * \
-                     tf.clip_by_value(ratio * v_ratio, 1.0 - CLIPRANGE / 1.5, 1.0 + CLIPRANGE / 1.5) / \
-                     tf.clip_by_value(v_ratio, 1.0 - CLIPRANGE, 1.0 + CLIPRANGE)
-        ########### 2 -> 0.2   2.1 -> 0.5
+        pg_losses = -(ADV + LR * ( HADV + v_ratio_t1)) * ratio
+        CLIPRANGE_ALPHA = 0.00006/(LR + 1e-7)
+        pg_losses2 = -(ADV + LR * (HADV + tf.clip_by_value(v_ratio_t1, 1.0 - CLIPRANGE_ALPHA, 1.0 + CLIPRANGE_ALPHA))) * \
+                     tf.clip_by_value(ratio * v_ratio_exp, 1.0 - CLIPRANGE, 1.0 + CLIPRANGE) / \
+                     tf.clip_by_value(v_ratio_exp, 1.0 - CLIPRANGE_ALPHA, 1.0 + CLIPRANGE_ALPHA)
         # Final PG loss
         pg_loss = tf.reduce_mean(tf.maximum(pg_losses, pg_losses2))
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
@@ -119,8 +120,8 @@ class Model(object):
         self.grads = grads
         self.var = var
         self._train_op = self.trainer.apply_gradients(grads_and_var)
-        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac','LR']
-        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, LR]
+        self.loss_names = ['policy_loss', 'value_loss', 'h_loss', 'policy_entropy', 'approxkl', 'clipfrac','vratio']
+        self.stats_list = [pg_loss, vf_loss, h_loss, entropy, approxkl, clipfrac, v_ratio]
 
 
         self.train_model = train_model
@@ -137,7 +138,7 @@ class Model(object):
         if MPI is not None:
             sync_from_root(sess, global_variables) #pylint: disable=E1101
 
-    def train(self, lr, cliprange, obs, returns, hreturns, masks, actions, values, hvalues, neglogpacs, neglogstd, states=None):
+    def train(self, lr, clip_l, cliprange, obs, returns, hreturns, masks, actions, values, hvalues, neglogpacs, neglogstd, states=None):
         # Here we calculate advantage A(s,a) = R + yV(s') - V(s)
         # Returns = R + yV(s')
         ### here we calculate del_hadvs = E(sigma) + yH(s') - H(s)
@@ -159,6 +160,7 @@ class Model(object):
             self.ADV : advs,
             self.R : returns,
             self.LR : lr,
+            self.CLIPRANGE_ALPHA : clip_l,
             self.CLIPRANGE : cliprange,
             self.OLDNEGLOGPAC : neglogpacs,
             self.OLDNEGLOGSTD : neglogstd,
