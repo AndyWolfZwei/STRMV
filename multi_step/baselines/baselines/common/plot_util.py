@@ -287,6 +287,26 @@ def plot_results(
                                               See docstrings for decay_steps in symmetric_ema or one_sided_ema functions.
 
     '''
+    # g2l_dict = {'14':'A2C','29':'PPO','19':'TRPO', '05':'STRMV'} # reacher -3
+    # g2l_dict = {'39':'A2C','55':'PPO','14':'TRPO', '21':'STRMV'} # Ant -2
+    # g2l_dict = {'55':'A2C','13':'PPO','19':'TRPO', '23':'STRMV'} # Hop -2
+    # g2l_dict = {'22':'A2C','27':'PPO','15':'TRPO', '36':'STRMV'} # InvertedPendulum -2
+    # g2l_dict = {'42':'A2C','27':'PPO','30':'TRPO', '53':'STRMV'} # swim -3
+    # g2l_dict = {'02':'A2C','34':'PPO','09':'TRPO', '56':'STRMV'} # walker -2
+    # g2l_dict = {'05':'A2C','45':'PPO','54':'TRPO', '55':'STRMV'} # IVP
+    # g2l_dict = {'20':'A2C','10':'PPO','32':'TRPO', '52':'STRMV'} #  Hum -2
+    #  -2
+    # g2l_color = {'A2C': 'yellow', 'PPO': 'green', 'TRPO': 'red', 'STRMV': 'blue'}
+    # 22222
+    # g2l_dict = {'26':'1','40': '1e-3', '39': '1e-4', '46': '1e-5', '16': '1e-6', '55':'1e-7'}  #  Walker2d -3
+    # g2l_dict = {'05':'1', '19': '1e-3', '35': '1e-4', '01': '1e-5', '36': '1e-6', '12':'1e-7'}  #  Ip -2
+    # g2l_dict = {'21':'1', '10': '1e-3', '00': '1e-4', '08': '1e-5', '23': '1e-6', '14':'1e-7'}  #  Hop -2
+    # g2l_color = {'1':'yellow','1e-3': 'green', '1e-4': 'magenta', '1e-5': 'red', '1e-6': 'cyan', '1e-7':'blue'}
+    # 33333
+    # g2l_dict = {'17': 'STRVM', '13': '1', '54': '2', '37': '3'}  # Hopper -3
+    g2l_dict = {'24': 'STRVM', '32': '1', '25': '2', '23': '3'}  # Walker -3
+    # g2l_dict = {'13': 'STRVM', '14': '1', '54': '2', '37': '3'}  # Ant -3
+    g2l_color = {'STRVM': 'blue', '1': 'green', '2': 'yellow', '3': 'red'}
 
     if split_fn is None: split_fn = lambda _ : ''
     if group_fn is None: group_fn = lambda _ : ''
@@ -309,6 +329,7 @@ def plot_results(
 
     for (isplit, sk) in enumerate(sorted(sk2r.keys())):
         g2l = {}
+        ggg = {}
         g2c = defaultdict(int)
         sresults = sk2r[sk]
         gresults = defaultdict(list)
@@ -326,12 +347,14 @@ def plot_results(
                     x, y, counts = symmetric_ema(x, y, x[0], x[-1], resample, decay_steps=smooth_step)
                 l, = ax.plot(x, y, color=COLORS[groups.index(group) % len(COLORS)])
                 g2l[group] = l
+                ggg[g2l_dict[group]] = l
         if average_group:
             for group in sorted(groups):
                 xys = gresults[group]
                 if not any(xys):
                     continue
-                color = COLORS[groups.index(group) % len(COLORS)]
+                color = g2l_color[g2l_dict[group]]
+                # color = COLORS[groups.index(group) % len(COLORS)]
                 origxs = [xy[0] for xy in xys]
                 minxlen = min(map(len, origxs))
                 def allequal(qs):
@@ -353,6 +376,7 @@ def plot_results(
                 ystderr = ystd / np.sqrt(len(ys))
                 l, = axarr[isplit][0].plot(usex, ymean, color=color)
                 g2l[group] = l
+                ggg[g2l_dict[group]] = l
                 if shaded_err:
                     ax.fill_between(usex, ymean - ystderr, ymean + ystderr, color=color, alpha=.4)
                 if shaded_std:
@@ -360,14 +384,28 @@ def plot_results(
 
 
         # https://matplotlib.org/users/legend_guide.html
-        plt.tight_layout()
+
+        # plt.tight_layout()
         if any(g2l.keys()):
-            ax.legend(
-                g2l.values(),
-                ['%s (%i)'%(g, g2c[g]) for g in g2l] if average_group else g2l.keys(),
-                loc=2 if legend_outside else None,
-                bbox_to_anchor=(1,1) if legend_outside else None)
-        ax.set_title(sk)
+            lb = [g2l_dict[g] for g in g2l] if average_group else g2l.keys()
+            # lb.sort()
+            ppp = sorted(ggg.items(), key=lambda x: x[0])
+            # ax.legend(
+            #     # ['%s (%i)'%(g, g2c[g]) for g in g2l] if average_group else g2l.keys(),
+            #     [i[1] for i in ppp],
+            #     [i[0] for i in ppp],
+            #     # ['A2C', 'PPO', 'TRPO', 'SPPO'],
+            #     loc='center right',
+            #     bbox_to_anchor=(0.98,0.3),
+            #     prop={'size':18})
+        sk = 'Walker2d-v2'
+        font = {'weight': 'normal',
+                'size': 25,
+                }
+        plt.tick_params(labelsize=20)
+        ax.set_title(sk, font)
+        ax.xaxis.get_major_formatter().set_powerlimits((0, 1))
+        ax.yaxis.get_major_formatter().set_powerlimits((0, 1))
     return f, axarr
 
 def regression_analysis(df):

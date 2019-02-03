@@ -1,10 +1,10 @@
 import numpy as np
 import matplotlib
 matplotlib.use('TkAgg') # Can change to 'Agg' for non-interactive mode
-
+import seaborn as sns
 import matplotlib.pyplot as plt
 plt.rcParams['svg.fonttype'] = 'none'
-
+import pickle
 from baselines.common import plot_util
 
 X_TIMESTEPS = 'timesteps'
@@ -65,11 +65,17 @@ def plot_curves(xy_list, xaxis, yaxis, title):
 
 def split_by_task(taskpath):
     return taskpath.dirname.split('/')[-1].split('-')[0]
-
+def default_split_fn(r):
+    import re
+    # match name between slash and -<digits> at the end of the string
+    # (slash in the beginning or -<digits> in the end or either may be missing)
+    return r.dirname.split('-')[-3]
 def plot_results(dirs, num_timesteps=10e6, xaxis=X_TIMESTEPS, yaxis=Y_REWARD, title='', split_fn=split_by_task):
     results = plot_util.load_results(dirs)
     # plot_curves(results,'x','y','t')
-    plot_util.plot_results(results, xy_fn=lambda r: ts2xy(r.monitor, xaxis, yaxis), split_fn=split_fn, average_group=True, resample=1000,smooth_step=1,shaded_std=False)
+    plot_util.plot_results(results, xy_fn=lambda r: ts2xy(r.monitor, xaxis, yaxis), split_fn=None, group_fn=default_split_fn, average_group=True, resample=100,smooth_step=1,shaded_std=False)
+
+
 
 # Example usage in jupyter-notebook
 # from baselines.results_plotter import plot_results
@@ -78,6 +84,7 @@ def plot_results(dirs, num_timesteps=10e6, xaxis=X_TIMESTEPS, yaxis=Y_REWARD, ti
 # Here ./log is a directory containing the monitor.csv files
 
 def main():
+    sns.set()
     import argparse
     import os
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -89,7 +96,16 @@ def main():
     args = parser.parse_args()
     args.dirs = [os.path.abspath(dir) for dir in args.dirs]
     plot_results(args.dirs, args.num_timesteps, args.xaxis, args.yaxis, args.task_name)
-    plt.savefig('/home/zhiwei/fig3')
+    # plt.ylim([-1000,2000])
+    font = {'weight': 'normal',
+             'size': 25,
+             }
+    plt.subplots_adjust(top=0.93, bottom=0.13, left=0.14, right=0.95)
+    plt.xlabel('Timesteps',font)
+    plt.ylabel('Cumulative Return', font)
+    # plt.xlabel('')
+
+    plt.savefig('C:/Users/zzhuang1/Desktop/tmp_last/3')
     plt.show()
 
 if __name__ == '__main__':

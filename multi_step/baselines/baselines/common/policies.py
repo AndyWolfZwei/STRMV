@@ -52,7 +52,7 @@ class PolicyWithValue(object):
 
         # Take an action
         self.action = self.pd.sample()
-        self.std = self.pd.std
+        # self.std = self.pd.std
         # Calculate the neg log of our probability
         self.neglogp = self.pd.neglogp(self.action)
         self.sess = sess or tf.get_default_session()
@@ -93,7 +93,7 @@ class PolicyWithValue(object):
         (action, value estimate, next state, negative log likelihood of the action under current policy parameters) tuple
         """
 
-        a, v, state, neglogp, h, std = self._evaluate([self.action, self.vf, self.state, self.neglogp, self.h, self.std], observation, **extra_feed)
+        a, v, state, neglogp, h, std = self._evaluate([self.action, self.vf, self.state, self.neglogp, self.h, self.pd.std], observation, **extra_feed)
         if state.size == 0:
             state = None
         return a, v, state, neglogp, h, std

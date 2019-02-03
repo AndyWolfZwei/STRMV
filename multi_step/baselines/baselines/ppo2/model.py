@@ -49,7 +49,7 @@ class Model(object):
         # Keep track of old critic
         self.OLDVPRED = OLDVPRED = tf.placeholder(tf.float32, [None])
         self.LR = LR = tf.placeholder(tf.float32, [])
-        self.CLIPRANGE_ALPHA = CLIPRANGE_ALPHA = tf.placeholder(tf.float32, [])
+        self.clip_l = clip_l = tf.placeholder(tf.float32, [])
         # Cliprange
         self.CLIPRANGE = CLIPRANGE = tf.placeholder(tf.float32, [])
         self.H = H = tf.placeholder(tf.float32, [None])
@@ -77,21 +77,24 @@ class Model(object):
 
         ### H loss
         hpred = train_model.h
-        h_loss = .5 * tf.reduce_mean(tf.square(hpred - H))
+        h_loss = tf.square(hpred - H)
 
         # Calculate ratio (pi current policy / pi old policy)
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
         v_ratio = tf.reduce_mean(OLDNEGLOGSTD - neglogstd, 1)
-        v_ratio_exp = tf.exp(tf.reduce_mean(OLDNEGLOGSTD - neglogstd, 1))
         v_ratio_t1 = tf.concat([v_ratio[1:], v_ratio[-1:]],axis=0)
         # Defining Loss = - J is equivalent to max J
-        pg_losses = -(ADV + LR * ( HADV + v_ratio_t1)) * ratio
-        CLIPRANGE_ALPHA = 0.00006/(LR + 1e-7)
-        pg_losses2 = -(ADV + LR * (HADV + tf.clip_by_value(v_ratio_t1, 1.0 - CLIPRANGE_ALPHA, 1.0 + CLIPRANGE_ALPHA))) * \
-                     tf.clip_by_value(ratio * v_ratio_exp, 1.0 - CLIPRANGE, 1.0 + CLIPRANGE) / \
-                     tf.clip_by_value(v_ratio_exp, 1.0 - CLIPRANGE_ALPHA, 1.0 + CLIPRANGE_ALPHA)
+        pg_losses = -(ADV + ent_coef * HADV + ent_coef * 1e-6 * v_ratio_t1) * ratio
+        CLIPRANGE_ALPHA = 0.0003/(LR + 1e-8)
+        CLIPRANGE1 = CLIPRANGE - 0.1
+        mid = tf.clip_by_value(ratio * tf.exp(v_ratio), 1.0 - CLIPRANGE, 1.0 + CLIPRANGE) / \
+                     tf.clip_by_value(tf.exp(v_ratio), 1.0 - CLIPRANGE1, 1.0 + CLIPRANGE1)
+        pg_losses2 = -(ADV + ent_coef * HADV + ent_coef * 1e-6 * tf.clip_by_value(v_ratio_t1, - CLIPRANGE_ALPHA, CLIPRANGE_ALPHA)) * mid
+                     # mid
         # Final PG loss
+
         pg_loss = tf.reduce_mean(tf.maximum(pg_losses, pg_losses2))
+        rlt = tf.cond(tf.equal(tf.reduce_mean(pg_losses), pg_loss), lambda: 1, lambda: 0)
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
 
@@ -120,8 +123,8 @@ class Model(object):
         self.grads = grads
         self.var = var
         self._train_op = self.trainer.apply_gradients(grads_and_var)
-        self.loss_names = ['policy_loss', 'value_loss', 'h_loss', 'policy_entropy', 'approxkl', 'clipfrac','vratio']
-        self.stats_list = [pg_loss, vf_loss, h_loss, entropy, approxkl, clipfrac, v_ratio]
+        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac','grads','var','neglogstd']
+        self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac, tf.reduce_mean(grads[18]), tf.exp(tf.reduce_mean(var[18])), neglogstd]
 
 
         self.train_model = train_model
@@ -160,7 +163,7 @@ class Model(object):
             self.ADV : advs,
             self.R : returns,
             self.LR : lr,
-            self.CLIPRANGE_ALPHA : clip_l,
+            self.clip_l : clip_l,
             self.CLIPRANGE : cliprange,
             self.OLDNEGLOGPAC : neglogpacs,
             self.OLDNEGLOGSTD : neglogstd,

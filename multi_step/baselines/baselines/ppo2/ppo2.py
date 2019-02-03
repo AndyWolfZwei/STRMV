@@ -129,8 +129,8 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         frac = 1.0 - (update - 1.0) / nupdates
         # Calculate the learning rate
         lrnow = lr(frac)
-        clip_l = np.clip(0.2 / frac,0,5)
-        # clip_l = 0.2
+        clip_l = ent_coef * (- (update - 1.0) / nupdates ** 2 + 1)
+        # clip_l = ent_coef * (update + 1.0 - nupdates) ** 2 / nupdates ** 2
         # Calculate the cliprange
         cliprangenow = cliprange(frac)
         # Get minibatch
@@ -157,7 +157,10 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
                     mbinds = inds[start:end]
                     slices = (arr[mbinds] for arr in (obs, returns, hreturns, masks, actions, values, hvalues, neglogpacs, neglogstd))
                     a = model.train(lrnow, clip_l, cliprangenow, *slices)
-                    mblossvals.append(a[:-1])
+                    if _ == 0 and start == 0:
+                        print('grad:{}----------std:{}'.format(a[-3],a[-2]))
+                    mblossvals.append(a[:-3])
+                    # print(np.mean(a[-3:],1))
         # else: # recurrent version
         #     assert nenvs % nminibatches == 0
         #     envsperbatch = nenvs // nminibatches

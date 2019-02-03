@@ -1,1 +1,0 @@
-python3 run_mujoco.py --env_id AVXIntel4s-v0 --expert_path /home/zhiwei/path/path_sum.npz --save_per_iter 10 --checkpoint_dir /home/zhiwei/save_model --log_dir /home/zhiwei/save_model
